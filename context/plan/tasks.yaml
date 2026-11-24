@@ -1,0 +1,76 @@
+# Task plan — produced from approved requirements, approved by the tech lead.
+# Exported to GitHub Issues by: npm run context:export-tasks
+# Each task declares the exact requirement versions it implements.
+tasks:
+  - id: T-01
+    title: "POST /users: create an account"
+    module: api-users
+    implements: [REQ-001@v1]
+    depends_on: []
+    owner: developer-1
+  - id: T-02
+    title: "POST /auth/login and GET /auth/me with lockout"
+    module: api-auth
+    implements: [REQ-002@v2]
+    depends_on: [T-01]
+    owner: developer-2
+  - id: T-03
+    title: "Role checks and PUT /users/{id}/role"
+    module: api-users
+    implements: [REQ-003@v1]
+    depends_on: [T-02]
+    owner: developer-1
+  - id: T-04
+    title: "Invitations: create, list, accept"
+    module: api-invitations
+    implements: [REQ-004@v1]
+    depends_on: [T-01]
+    owner: developer-3
+  - id: T-05
+    title: "Deactivate / reactivate and token revocation"
+    module: api-users
+    implements: [REQ-005@v1]
+    depends_on: [T-02]
+    owner: developer-2
+  - id: T-06
+    title: "Audit events: record and GET /audit-events"
+    module: api-audit
+    implements: [REQ-006@v1]
+    depends_on: [T-01]
+    owner: developer-3
+  - id: T-07
+    title: "Socket.IO live directory"
+    module: realtime
+    implements: [REQ-007@v1]
+    depends_on: [T-02]
+    owner: developer-4
+  - id: T-08
+    title: "GET /users search and pagination"
+    module: api-users
+    implements: [REQ-008@v1]
+    depends_on: [T-03]
+    owner: developer-1
+  - id: T-09
+    title: "Web: sign-in and session"
+    module: web
+    implements: [REQ-002@v2]
+    depends_on: [T-02]
+    owner: developer-5
+  - id: T-10
+    title: "Web: live directory with search, create, role and deactivate"
+    module: web
+    implements: [REQ-001@v1, REQ-003@v1, REQ-005@v1, REQ-007@v1, REQ-008@v1]
+    depends_on: [T-07, T-08]
+    owner: developer-5
+  - id: T-11
+    title: "Web: invitations and accept page"
+    module: web
+    implements: [REQ-004@v1]
+    depends_on: [T-04]
+    owner: developer-4
+  - id: T-12
+    title: "Web: audit log page"
+    module: web
+    implements: [REQ-006@v1]
+    depends_on: [T-06]
+    owner: developer-4

@@ -1,0 +1,535 @@
+openapi: 3.1.0
+info:
+  title: User Management API
+  version: 1.0.0
+  summary: Accounts, roles, invitations, audit log and live directory.
+  description: |
+    The agreed contract between the web app, the API and the tests.
+    Every operation lists the requirements it serves in `x-requirements`
+    (see `context/requirements/`). Errors follow RFC 9457 (ADR-003).
+
+    Live events (REQ-007, ADR-004) are sent over Socket.IO on the same origin:
+    connect with `auth: { token }`; admins and managers receive `user.created`,
+    `user.updated`, `user.deactivated`, `user.reactivated` and `invitation.created`.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:3000/api
+    description: Local development (the API serves the web app on the same origin in production)
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Sign-in and current user
+  - name: Users
+    description: Accounts, roles and status
+  - name: Invitations
+    description: Single-use invitation links
+  - name: Audit
+    description: Append-only audit log
+  - name: Meta
+    description: Health and build information
+
+paths:
+  /health:
+    get:
+      tags: [Meta]
+      operationId: getHealth
+      summary: Liveness check
+      security: []
+      x-requirements: []
+      x-internal-purpose: operations
+      responses:
+        '200':
+          description: The API is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /meta:
+    get:
+      tags: [Meta]
+      operationId: getMeta
+      summary: Context version this build was made from (release gate)
+      security: []
+      x-requirements: []
+      x-internal-purpose: release-traceability
+      responses:
+        '200':
+          description: Build information
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contextVersion, requirements]
+                properties:
+                  contextVersion: { type: integer }
+                  requirements:
+                    type: object
+                    additionalProperties: { type: integer }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Sign in with email and password
+      security: []
+      x-requirements: [REQ-002, REQ-005]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '423':
+          description: Sign-in locked for this email for 15 minutes
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: The signed-in user
+      x-requirements: [REQ-002]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users:
+    get:
+      tags: [Users]
+      operationId: searchUsers
+      summary: Search the directory
+      x-requirements: [REQ-008, REQ-003]
+      parameters:
+        - name: q
+          in: query
+          description: Text contained in the name or the email, any letter case
+          schema: { type: string, maxLength: 100 }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/Role' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Status' }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of users
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: Create an account (admin)
+      x-requirements: [REQ-001, REQ-006, REQ-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, name, role, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                name: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+                role: { $ref: '#/components/schemas/Role' }
+                password: { type: string, minLength: 10, maxLength: 200 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users]
+      operationId: getUser
+      summary: Read one user (admin, manager, or the user themself)
+      x-requirements: [REQ-003]
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users]
+      operationId: updateUser
+      summary: Change a user's name (admin, or the user themself)
+      x-requirements: [REQ-003, REQ-006, REQ-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/{id}/role:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Users]
+      operationId: setUserRole
+      summary: Change a user's role (admin)
+      x-requirements: [REQ-003, REQ-006, REQ-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                role: { $ref: '#/components/schemas/Role' }
+      responses:
+        '200':
+          description: Role changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/{id}/deactivate:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      operationId: deactivateUser
+      summary: Deactivate a user and revoke their tokens (admin)
+      x-requirements: [REQ-005, REQ-006, REQ-007]
+      responses:
+        '200':
+          description: Deactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /users/{id}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      operationId: reactivateUser
+      summary: Reactivate a user (admin)
+      x-requirements: [REQ-005, REQ-006, REQ-007]
+      responses:
+        '200':
+          description: Reactivated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /invitations:
+    get:
+      tags: [Invitations]
+      operationId: listInvitations
+      summary: List invitations, newest first (admin)
+      x-requirements: [REQ-004]
+      responses:
+        '200':
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Invitation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Invitations]
+      operationId: createInvitation
+      summary: Invite an email with a role (admin)
+      x-requirements: [REQ-004, REQ-006, REQ-007]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, role]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                role: { $ref: '#/components/schemas/Role' }
+      responses:
+        '201':
+          description: Invitation created and sent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invitation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /invitations/{token}/accept:
+    post:
+      tags: [Invitations]
+      operationId: acceptInvitation
+      summary: Accept an invitation and create the account
+      security: []
+      x-requirements: [REQ-004, REQ-006, REQ-007]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, password]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100, pattern: '\S' }
+                password: { type: string, minLength: 10, maxLength: 200 }
+      responses:
+        '201':
+          description: Account created and signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: Invitation expired or already used
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /audit-events:
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: Read the audit log, newest first (admin)
+      x-requirements: [REQ-006]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of audit events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 2147483647 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      description: Above 100 is refused with 422 (REQ-008)
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  schemas:
+    Role:
+      type: string
+      enum: [admin, manager, member]
+    Status:
+      type: string
+      enum: [active, inactive]
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, name, role, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { $ref: '#/components/schemas/Status' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UserPage:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/User' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+    Session:
+      type: object
+      required: [token, expiresAt, user]
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/User' }
+    Invitation:
+      type: object
+      required: [id, email, role, status, expiresAt, createdAt, invitedBy]
+      properties:
+        id: { type: integer }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+        status: { type: string, enum: [pending, accepted, expired] }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        invitedBy: { type: integer }
+        acceptUrl:
+          type: string
+          description: Returned only when the invitation is created
+    AuditEvent:
+      type: object
+      required: [id, action, actorId, targetId, details, createdAt]
+      properties:
+        id: { type: integer }
+        action:
+          type: string
+          enum: [user.created, user.updated, user.role_changed, user.deactivated, user.reactivated, invitation.created, invitation.accepted]
+        actorId: { type: [integer, 'null'] }
+        actorEmail: { type: [string, 'null'] }
+        targetId: { type: [integer, 'null'] }
+        targetEmail: { type: [string, 'null'] }
+        details: { type: object }
+        createdAt: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    TooManyRequests:
+      description: Rate limit reached
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Missing, invalid or revoked token, or wrong credentials
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: The role is not allowed, or the account is inactive
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Not found
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Conflicts with the current state
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Invalid input; each field is listed in `errors`
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }

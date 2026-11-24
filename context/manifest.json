@@ -1,0 +1,31 @@
+{
+  "contextVersion": 1,
+  "contentHash": "66978fe3fade6d1c67d3bd4ee0442aead6a46da2342d27428aa2149e04121ded",
+  "requirements": {
+    "REQ-001": 1,
+    "REQ-002": 2,
+    "REQ-003": 1,
+    "REQ-004": 1,
+    "REQ-005": 1,
+    "REQ-006": 1,
+    "REQ-007": 1,
+    "REQ-008": 1
+  },
+  "deprecated": {},
+  "drafts": [],
+  "decisions": {
+    "ADR-001": 1,
+    "ADR-002": 1,
+    "ADR-003": 1,
+    "ADR-004": 1,
+    "ADR-005": 1,
+    "ADR-006": 1
+  },
+  "contract": {
+    "version": "1.0.0",
+    "operations": 15
+  },
+  "openChangeRequests": [
+    "CR-002"
+  ]
+}
