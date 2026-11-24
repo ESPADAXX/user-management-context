@@ -1,0 +1,42 @@
+name: Change request
+description: A client need — new, changed, or no longer wanted. The product owner approves it.
+title: "[Change request] "
+labels: [change-request]
+body:
+  - type: textarea
+    id: words
+    attributes:
+      label: Client's words
+      description: Quote the source exactly (meeting, email, ticket).
+    validations: { required: true }
+  - type: input
+    id: source
+    attributes:
+      label: Source and date
+      placeholder: client call 2026-11-24
+    validations: { required: true }
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options: [New requirement, Change to an existing requirement, Clarification, Deprecate a requirement]
+    validations: { required: true }
+  - type: input
+    id: target
+    attributes:
+      label: Requirement affected
+      placeholder: REQ-004
+  - type: textarea
+    id: rule
+    attributes:
+      label: Proposed rule (EARS)
+      placeholder: "WHEN <trigger>, THE SYSTEM SHALL <response>."
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: "- <action> → <observable result>"
+  - type: textarea
+    id: questions
+    attributes:
+      label: Open questions for the client

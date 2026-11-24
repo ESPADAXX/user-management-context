@@ -1,0 +1,19 @@
+{
+  "name": "@ums/context-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP context server: the only door agents use to read the shared context, stamped with versions.",
+  "bin": { "context-server": "src/index.js" },
+  "scripts": {
+    "start": "node src/index.js --http",
+    "stdio": "node src/index.js",
+    "test": "node --test test/server.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "express": "^4.21.0",
+    "yaml": "^2.6.0",
+    "zod": "^3.23.8"
+  }
+}

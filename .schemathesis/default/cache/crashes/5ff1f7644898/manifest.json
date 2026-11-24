@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "schemathesis_version": "4.34.2",
+  "schema_location": "../../../../../context/contracts/openapi.yaml",
+  "base_url": "http://localhost:3123/api",
+  "created_at": "2026-11-24T20:23:21.979535+00:00",
+  "tls_verify": true
+}

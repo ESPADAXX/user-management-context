@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context — User Management</title>
+<style>
+  :root { --ink:#18202b; --muted:#687385; --line:#e3e6eb; --accent:#334fd8; --ok:#12805c; --warn:#b54708; --bad:#c0362c; }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:#f5f6f8; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; gap:16px; align-items:center; }
+  header b { color:var(--accent); } .pill { background:#eaefff; color:var(--accent); border-radius:999px; padding:2px 12px; font-weight:600; }
+  .pill.flash { animation: f 1.5s; } @keyframes f { from { background:var(--accent); color:#fff; } }
+  .live { color:var(--muted); font-size:12px; } .live.on { color:var(--ok); }
+  main { max-width:1100px; margin:0 auto; padding:24px; display:grid; gap:20px; }
+  section { background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px; }
+  h2 { font-size:15px; margin:0 0 10px; } table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:.04em; }
+  .chip { display:inline-block; border-radius:999px; padding:0 8px; font-size:12px; background:#eef0f3; margin:1px; }
+  .ok { background:#e6f6ef; color:var(--ok); } .stale { background:#fff4e5; color:var(--warn); } .bad { background:#fdecea; color:var(--bad); }
+  tr.changed td { animation: row 2.5s; } @keyframes row { from { background:#eaefff; } }
+  code, pre { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; } pre { background:#111827; color:#e5e7eb; padding:12px; border-radius:8px; overflow:auto; }
+  .muted { color:var(--muted); } .rule { white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:12px; color:#344054; }
+</style>
+</head>
+<body>
+<header><b>● Context</b> User Management <span class="pill" id="v">v–</span><span class="live" id="live">○ connecting</span></header>
+<main>
+  <section><h2>Requirements</h2><table id="reqs"></table></section>
+  <section><h2>Tasks (task slices for developers and agents)</h2><table id="tasks"></table></section>
+  <section><h2>Change requests</h2><table id="crs"></table></section>
+  <section><h2>Decisions</h2><table id="adrs"></table></section>
+  <section><h2>Connect an agent</h2>
+    <p class="muted">Any MCP client can read this context. Remote (this server):</p>
+    <pre id="remote"></pre>
+    <p class="muted">Local (stdio), from the repository root:</p>
+    <pre>{ "mcpServers": { "context": { "command": "node", "args": ["tools/context-server/src/index.js"] } } }</pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+let changed = new Set();
+$('remote').textContent = JSON.stringify({ mcpServers: { context: { type: 'http', url: location.origin + '/mcp' } } }, null, 2);
+
+async function load() {
+  const o = await (await fetch('/api/overview')).json();
+  $('v').textContent = 'context v' + o.manifest.contextVersion + (o.manifest.uncommitted ? ' (uncommitted)' : '');
+  $('reqs').innerHTML = '<tr><th>Id</th><th>Title</th><th>Version</th><th>Status</th><th>Affects</th></tr>' + o.requirements.map((r) =>
+    `<tr class="${changed.has(r.id) ? 'changed' : ''}"><td><a href="/api/requirements/${r.id}"><code>${r.id}</code></a></td><td>${esc(r.title)}</td><td><span class="chip">v${r.version}</span></td><td><span class="chip ${r.status === 'approved' ? 'ok' : 'bad'}">${r.status}</span></td><td>${r.affects.map((a) => `<span class="chip">${esc(a)}</span>`).join('')}</td></tr>`).join('');
+  $('tasks').innerHTML = '<tr><th>Task</th><th>Module</th><th>Implements</th><th>State</th></tr>' + o.tasks.map((t) =>
+    `<tr class="${t.stale ? 'changed' : ''}"><td><a href="/api/tasks/${t.id}/context"><code>${t.id}</code></a> ${esc(t.title)}</td><td>${esc(t.module)}</td><td>${t.implements.map((i) => `<span class="chip">${i}</span>`).join('')}</td><td>${t.stale ? `<span class="chip stale">stale</span> <span class="muted">${esc(t.staleReasons.join('; '))}</span>` : '<span class="chip ok">current</span>'}</td></tr>`).join('');
+  $('crs').innerHTML = '<tr><th>Id</th><th>Target</th><th>Status</th><th>Source</th></tr>' + o.changeRequests.map((c) =>
+    `<tr><td><code>${c.id}</code></td><td>${esc(c.target)}</td><td><span class="chip ${c.status === 'approved' ? 'ok' : c.status === 'draft' ? 'stale' : 'bad'}">${c.status}</span></td><td class="muted">${esc(c.source)}</td></tr>`).join('');
+  $('adrs').innerHTML = '<tr><th>Id</th><th>Title</th><th>Status</th></tr>' + o.decisions.map((d) =>
+    `<tr><td><code>${d.id}</code></td><td>${esc(d.title)}</td><td><span class="chip ${d.status === 'accepted' ? 'ok' : ''}">${d.status}</span></td></tr>`).join('');
+}
+
+const es = new EventSource('/events');
+es.onopen = () => { $('live').textContent = '● live'; $('live').className = 'live on'; };
+es.onerror = () => { $('live').textContent = '○ reconnecting'; $('live').className = 'live'; };
+es.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.hello) return load();
+  changed = new Set(msg.requirements);
+  const pill = $('v'); pill.classList.remove('flash'); void pill.offsetWidth; pill.classList.add('flash');
+  load();
+  setTimeout(() => { changed.clear(); }, 3000);
+};
+</script>
+</body>
+</html>

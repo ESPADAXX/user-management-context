@@ -1,0 +1,19 @@
+# Each kind of context has exactly one human owner who approves its changes.
+# Replace the handles with your team's GitHub usernames or teams (e.g. @org/product).
+
+# Product owner: requirements, change requests, glossary
+/context/requirements/      @ESPADAXX
+/context/change-requests/   @ESPADAXX
+/context/glossary.md        @ESPADAXX
+
+# Tech lead: decisions, architecture, contract, plan, agent rules, gates
+/context/decisions/         @ESPADAXX
+/context/architecture/      @ESPADAXX
+/context/contracts/         @ESPADAXX
+/context/plan/              @ESPADAXX
+/context/AGENTS.md          @ESPADAXX
+/scripts/context/           @ESPADAXX
+/.github/                   @ESPADAXX
+
+# QA: acceptance tests
+/apps/api/test/acceptance/  @ESPADAXX

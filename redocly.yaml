@@ -1,0 +1,15 @@
+# Contract lint (Redocly CLI). Errors fail the context-gates workflow.
+extends:
+  - recommended
+rules:
+  # /health and /meta are operational endpoints with no client error case.
+  operation-4xx-response:
+    severity: error
+  no-server-example.com: off
+  rule/every-operation-traces-a-requirement:
+    subject:
+      type: Operation
+      property: x-requirements
+    assertions:
+      defined: true
+    message: Every operation must list x-requirements (see context/AGENTS.md).

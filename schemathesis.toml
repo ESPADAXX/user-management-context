@@ -1,0 +1,5 @@
+# Contract tests: the running API against context/contracts/openapi.yaml.
+# 423 (sign-in locked, REQ-002) and 410 (invitation used or expired, REQ-004) are
+# documented answers to schema-valid requests, so they are accepted here.
+[checks.positive_data_acceptance]
+expected-statuses = ["2xx", "401", "403", "404", "409", "410", "423", "429"]

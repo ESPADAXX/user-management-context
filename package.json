@@ -1,0 +1,31 @@
+{
+  "name": "user-management-context",
+  "private": true,
+  "description": "User management app built on a centralized, versioned context (requirements, ADRs, contract) enforced by CI and served to agents over MCP.",
+  "type": "module",
+  "workspaces": ["apps/api", "apps/web", "tools/context-server"],
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "npm run dev -w apps/api & npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "start": "npm start -w apps/api",
+    "test": "npm test -w apps/api && npm test -w tools/context-server && npm run test:scripts",
+    "test:scripts": "node --test scripts/context/test/gates.test.mjs",
+    "context:manifest": "node scripts/context/build-manifest.mjs",
+    "context:manifest:check": "node scripts/context/build-manifest.mjs --check",
+    "context:validate": "node scripts/context/validate-context.mjs",
+    "context:stale": "node scripts/context/check-context.mjs",
+    "context:trace": "node scripts/context/check-trace.mjs",
+    "context:impact": "node scripts/context/impact.mjs",
+    "context:export-tasks": "node scripts/context/export-tasks.mjs",
+    "context:server": "npm start -w tools/context-server",
+    "lint:contract": "redocly lint context/contracts/openapi.yaml",
+    "gates": "npm run context:manifest:check && npm run context:validate && npm run context:trace && npm run lint:contract"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^1.25.0"
+  }
+}

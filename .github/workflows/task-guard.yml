@@ -1,0 +1,27 @@
+# Task states: Ready → In progress → Stale → Done. A stale task cannot be closed;
+# updating its Implements line to the current versions re-syncs it.
+name: task-guard
+
+on:
+  issues:
+    types: [closed, edited, opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guard:
+    name: Task guard
+    if: contains(github.event.issue.body, 'Implements:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/context/task-guard.mjs

@@ -1,0 +1,89 @@
+# Component 6 — Enforcement. Every pull request must pass these before it can merge
+# (make them required in branch protection: scripts/github/protect-main.sh).
+name: context-gates
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gates:
+    name: Context gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Manifest is up to date
+        run: npm run context:manifest:check
+
+      - name: Context is valid (EARS, versions bumped, nothing deleted)
+        run: node scripts/context/validate-context.mjs --base origin/${{ github.base_ref }}
+
+      - name: Stale-context check (Implements REQ-xxx@vN is current)
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/context/check-context.mjs --base origin/${{ github.base_ref }}
+
+      - name: Trace check (every requirement has a task and a current test)
+        run: node scripts/context/check-trace.mjs --base origin/${{ github.base_ref }}
+
+      - name: Contract lint (Redocly)
+        run: npm run lint:contract
+
+      - name: Impact preview
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^context/requirements/'; then
+            node scripts/context/impact.mjs --base origin/${{ github.base_ref }} --out impact.md
+            gh pr comment ${{ github.event.pull_request.number }} --body-file impact.md --edit-last || \
+              gh pr comment ${{ github.event.pull_request.number }} --body-file impact.md
+          else
+            echo "No requirement changed."
+          fi
+
+  contract:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: pip install schemathesis
+      - name: Start the API
+        working-directory: apps/api
+        env:
+          DATABASE_PATH: /tmp/contract.sqlite
+          RATE_LIMIT_PER_MINUTE: '0'
+          JWT_SECRET: contract-tests
+        run: |
+          node server.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/api/health && break; sleep 1; done
+      - name: Schemathesis — the running API against context/contracts/openapi.yaml
+        run: |
+          TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login -H 'content-type: application/json' \
+            -d '{"email":"admin@example.com","password":"ChangeMe123!"}' | python -c "import sys,json;print(json.load(sys.stdin)['token'])")
+          schemathesis run context/contracts/openapi.yaml --url http://localhost:3000/api \
+            -H "Authorization: Bearer $TOKEN" --checks all --max-examples 50
+      - name: API log
+        if: failure()
+        run: cat /tmp/api.log

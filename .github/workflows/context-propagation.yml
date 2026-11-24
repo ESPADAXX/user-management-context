@@ -1,0 +1,43 @@
+# Component 5 — Change propagation. When context/ changes on main:
+# the impact analyzer marks linked task issues and pull requests stale, alerts the team,
+# and the task plan is synced to the board (GitHub Issues).
+name: context-propagation
+
+on:
+  push:
+    branches: [main]
+    paths: ['context/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  propagate:
+    name: Impact analysis and task sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Mark stale and notify
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: |
+          BASE="${{ github.event.before }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then BASE=HEAD~1; fi
+          node scripts/context/impact.mjs --base "$BASE" --apply --out impact.md
+          cat impact.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Sync the task plan to GitHub Issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/context/export-tasks.mjs

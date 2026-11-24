@@ -1,0 +1,19 @@
+name: Decision needed
+description: A technical choice no ADR covers. The tech lead decides and records an ADR.
+title: "[Decision needed] "
+labels: [decision-needed]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations: { required: true }
+  - type: textarea
+    id: options
+    attributes:
+      label: Options considered
+  - type: input
+    id: requirements
+    attributes:
+      label: Requirements concerned
+      placeholder: REQ-005

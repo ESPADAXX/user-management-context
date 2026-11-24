@@ -1,0 +1,46 @@
+# Release gate: the release states its context version and ships no deprecated requirement.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run gates
+      - run: npm test
+      - name: Release notes with the context version
+        run: |
+          node -e '
+            const m = require("./context/manifest.json");
+            console.log(`Built from **context v${m.contextVersion}**\n`);
+            console.log("| Requirement | Version |\n|---|---|");
+            for (const [id, v] of Object.entries(m.requirements)) console.log(`| ${id} | v${v} |`);
+            if (Object.keys(m.deprecated).length) console.log(`\nDeprecated (not shipped): ${Object.keys(m.deprecated).join(", ")}`);
+          ' > notes.md
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the image
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_REF_NAME}
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --notes-file notes.md
